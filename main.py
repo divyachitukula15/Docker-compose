@@ -2,6 +2,7 @@ import os
 import psycopg
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 
 load_dotenv()
 
@@ -53,3 +54,53 @@ conn.close()
 print("PostgreSQL table and seed data ready!")
 
 app = FastAPI()
+
+# GET - Read all tasks
+@app.get("/tasks", description="Get all tasks")
+def get_tasks():
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM tasks")
+    rows = cursor.fetchall()
+
+    cursor.close()
+    conn.close()
+
+    return [
+        {
+            "id": row[0],
+            "title": row[1],
+            "done": row[2]
+        }
+        for row in rows
+    ]
+
+
+# GET - Read one task
+@app.get("/tasks/{task_id}", description="Get a single task by ID")
+def get_task_using_id(task_id: int):
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT * FROM tasks WHERE id = %s",
+        (task_id,)
+    )
+
+    row = cursor.fetchone()
+
+    cursor.close()
+    conn.close()
+
+    if row is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"Task {task_id} not found"}
+        )
+
+    return {
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
+    }
