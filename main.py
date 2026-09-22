@@ -1,8 +1,9 @@
 import os
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI,HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 load_dotenv()
 
@@ -10,6 +11,14 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
     return psycopg.connect(DATABASE_URL)
+
+# Create FastAPI app
+app = FastAPI()
+
+# Pydantic model 
+class Task(BaseModel): 
+    title: str 
+    done: bool = False
 
 # Test PostgreSQL connection
 conn = get_db()
@@ -19,6 +28,8 @@ conn.close()
 # Create table and seed tasks
 conn = get_db()
 cursor = conn.cursor()
+
+
 
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS tasks (
@@ -53,7 +64,9 @@ conn.close()
 
 print("PostgreSQL table and seed data ready!")
 
-app = FastAPI()
+
+
+
 
 # GET - Read all tasks
 @app.get("/tasks", description="Get all tasks")
@@ -104,3 +117,111 @@ def get_task_using_id(task_id: int):
         "title": row[1],
         "done": row[2]
     }
+
+@app.post("/tasks", status_code=201, description="Create a new task")
+def create_task(task: Task):
+    if not task.title.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Title cannot be empty"
+        )
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO tasks (title, done)
+        VALUES (%s, %s)
+        RETURNING id, title, done
+        """,
+        (task.title, task.done)
+    )
+
+    row = cursor.fetchone()
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
+    }
+
+@app.put("/tasks/{task_id}", description="Update a task by ID")
+def update_task(task_id: int, task: Task):
+
+    if not task.title.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Title cannot be empty"
+        )
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        UPDATE tasks
+        SET title = %s, done = %s
+        WHERE id = %s
+        RETURNING id, title, done
+        """,
+        (task.title, task.done, task_id)
+    )
+
+    row = cursor.fetchone()
+
+    if row is None:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "id": row[0],
+        "title": row[1],
+        "done": row[2]
+    }
+
+@app.delete("/tasks/{task_id}", status_code=204, description="Delete a task by ID")
+def delete_task(task_id: int):
+
+    conn = get_db()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM tasks WHERE id = %s RETURNING id",
+        (task_id,)
+    )
+
+    row = cursor.fetchone()
+
+    if row is None:
+        conn.rollback()
+        cursor.close()
+        conn.close()
+
+        raise HTTPException(
+            status_code=404,
+            detail=f"Task {task_id} not found"
+        )
+
+    conn.commit()
+
+    cursor.close()
+    conn.close()
+
+    return None
