@@ -1,7 +1,7 @@
 import os
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI,HTTPException
+from fastapi import FastAPI,HTTPException,status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -25,6 +25,68 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def test_supabase():
     response = supabase.auth.get_session()
     return {"message": "Supabase connection working"}
+
+class AuthRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/auth/signup", status_code=status.HTTP_201_CREATED)
+def signup(data: AuthRequest):
+
+    # Missing email/password
+    if not data.email or not data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email and password are required"
+        )
+
+    try:
+        response = supabase.auth.sign_up({
+            "email": data.email,
+            "password": data.password
+        })
+
+        return {
+            "user": response.user
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+
+
+@app.post("/auth/login")
+def login(data: AuthRequest):
+
+    # Missing email/password
+    if not data.email or not data.password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email and password are required"
+        )
+
+    try:
+        response = supabase.auth.sign_in_with_password({
+            "email": data.email,
+            "password": data.password
+        })
+
+        # Successful login → 200
+        return {
+            "access_token": response.session.access_token,
+            "refresh_token": response.session.refresh_token
+        }
+
+    except Exception:
+        # Wrong credentials → 401
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid login credentials"
+        )
+
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
