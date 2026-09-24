@@ -1,18 +1,20 @@
 import os
 import psycopg
 from dotenv import load_dotenv
-from fastapi import FastAPI,HTTPException,status
+from fastapi import FastAPI,HTTPException,status,Header,Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from typing import Optional
 from supabase import create_client
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
 load_dotenv()
 
 # Create FastAPI app
 app = FastAPI()
-
+security = HTTPBearer()
 
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -86,6 +88,29 @@ def login(data: AuthRequest):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid login credentials"
         )
+
+@app.get("/public/info")
+def public_info():
+    return {
+        "message": "Welcome stranger! This info is public."
+    }
+
+@app.get("/protected/profile")
+def protected_profile(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token = credentials.credentials
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"error": "Access token required"}
+        )
+
+    return {
+        "message": "Protected profile accessed",
+        "token": token
+    }
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")
