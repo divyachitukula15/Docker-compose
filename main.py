@@ -5,15 +5,33 @@ from fastapi import FastAPI,HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from supabase import create_client
+
+
 load_dotenv()
+
+# Create FastAPI app
+app = FastAPI()
+
+
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+# supabase client creation
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+@app.get("/test-supabase")
+def test_supabase():
+    response = supabase.auth.get_session()
+    return {"message": "Supabase connection working"}
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_db():
     return psycopg.connect(DATABASE_URL)
 
-# Create FastAPI app
-app = FastAPI()
+
 
 # Pydantic model 
 class Task(BaseModel): 
@@ -225,3 +243,5 @@ def delete_task(task_id: int):
     conn.close()
 
     return None
+
+
