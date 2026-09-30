@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from typing import Optional
-from supabase import create_client
+from supabase import create_client,Client
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 
@@ -27,6 +27,12 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def test_supabase():
     response = supabase.auth.get_session()
     return {"message": "Supabase connection working"}
+
+@app.get("/public/info")
+def public_info():
+    return {
+        "message": "Welcome stranger! This info is public."
+    }
 
 class AuthRequest(BaseModel):
     email: str
@@ -89,28 +95,32 @@ def login(data: AuthRequest):
             detail="Invalid login credentials"
         )
 
-@app.get("/public/info")
-def public_info():
-    return {
-        "message": "Welcome stranger! This info is public."
-    }
 
-@app.get("/protected/profile")
-def protected_profile(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-):
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
 
-    if not token:
+    try:
+        # This calls Supabase to verify if the token is valid
+        response = supabase.auth.get_user(token)
+        return response.user
+    except Exception:
+        # If the token is wrong, expired, or invalid, it throws a 401 Unauthorized
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"error": "Access token required"}
+            detail="Invalid or expired authentication token"
         )
 
+@app.get("/auth/protected_profile")
+def get_user_profile(current_user = Depends(get_current_user)):
+    # If a wrong token is sent here, it will automatically return a 401 Unauthorized error.
+    # If a correct token is sent, it will return a 200 OK with the user data.
     return {
-        "message": "Protected profile accessed",
-        "token": token
-    }
+            "message": "Protected profile accessed",
+            "user": current_user
+        }
+
+
 
 
 DATABASE_URL = os.getenv("DATABASE_URL")

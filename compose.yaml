@@ -16,9 +16,9 @@ services:
       POSTGRES_DB: tasks
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d tasks"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      #interval: 20s
+      #timeout: 20s
+      #retries: 5
     volumes:
       - taskdata:/var/lib/postgresql/data
 
