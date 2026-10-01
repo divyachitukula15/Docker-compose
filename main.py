@@ -1,6 +1,7 @@
 import os
 import psycopg
 from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI,HTTPException,status,Header,Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -9,19 +10,15 @@ from typing import Optional
 from supabase import create_client,Client
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
+from auth import get_current_user, supabase
 
-load_dotenv()
+
 
 # Create FastAPI app
 app = FastAPI()
 security = HTTPBearer()
 
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# supabase client creation
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 @app.get("/test-supabase")
 def test_supabase():
@@ -97,31 +94,29 @@ def login(data: AuthRequest):
 
 
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials
 
-    try:
-        # This calls Supabase to verify if the token is valid
-        response = supabase.auth.get_user(token)
-        return response.user
-    except Exception:
-        # If the token is wrong, expired, or invalid, it throws a 401 Unauthorized
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication token"
-        )
 
-@app.get("/auth/protected_profile")
-def get_user_profile(current_user = Depends(get_current_user)):
-    # If a wrong token is sent here, it will automatically return a 401 Unauthorized error.
-    # If a correct token is sent, it will return a 200 OK with the user data.
+@app.get("/protected/profile")
+def profile(user=Depends(get_current_user)):
     return {
-            "message": "Protected profile accessed",
-            "user": current_user
-        }
+        "message": "You are authenticated",
+        "user_id": user.id,
+        "email": user.email
+    }
 
 
+@app.get("/protected/dashboard")
+def dashboard(user=Depends(get_current_user)):
+    return {
+        "message": "Welcome to dashboard",
+        "user_id": user.id
+    }
 
+
+@app.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(user=Depends(get_current_user)):
+    supabase.auth.sign_out()
+    return
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
